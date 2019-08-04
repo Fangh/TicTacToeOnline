@@ -20,9 +20,9 @@ public class BoardManager : MonoBehaviour
         Instance = this;
     }
 
-    public SGame InitializeNewGame(string uniqueID, string player1ID)
+    public SGame InitializeNewGame(string uniqueID, SPlayer player1)
     {
-        currentGame = new SGame(uniqueID, player1ID);
+        currentGame = new SGame(uniqueID, player1);
         CleanBoard();
         OnNewGame?.Invoke();
         NextTurn();
@@ -31,12 +31,12 @@ public class BoardManager : MonoBehaviour
         return currentGame;
     }
 
-    public void InitializeGameWithData(string id, string player1ID, string player2ID, int[] board, int currentTurn)
+    public void InitializeGameWithData(string id, SPlayer player1, SPlayer player2, int[] board, int currentTurn)
     {
         CleanBoard();
         OnNewGame?.Invoke();
 
-        currentGame = new SGame(id, player1ID, player2ID, board, currentTurn);
+        currentGame = new SGame(id, player1, player2, board, currentTurn);
         if (currentGame.currentTurn == 0)
             NextTurn();
 
@@ -59,14 +59,14 @@ public class BoardManager : MonoBehaviour
         if (currentGame.currentTurn != data.currentTurn)
             currentGame.currentTurn = data.currentTurn;
 
-        if (currentGame.player1ID != data.player1ID)
+        if (currentGame.player1.id != data.player1.id || currentGame.player1.token != data.player1.token)
         {
-            currentGame.player1ID = data.player1ID;
+            currentGame.player1 = data.player1;
             OnBoardUpdated?.Invoke(currentGame);
         }
-        if (currentGame.player2ID != data.player2ID)
+        if (currentGame.player2.id != data.player2.id || currentGame.player2.token != data.player2.token)
         {
-            currentGame.player2ID = data.player2ID;
+            currentGame.player2 = data.player2;
         }
 
         for (int i = 0; i < 9; i++)
@@ -132,6 +132,9 @@ public class BoardManager : MonoBehaviour
             currentGame.currentTurn = 2;
         else
             currentGame.currentTurn = 1;
+
+        if(!string.IsNullOrEmpty(currentGame.player1.id) && !string.IsNullOrEmpty(currentGame.player2.id))
+            FCMManager.Instance.SendNotification(ENotifType.nextTurn);
     }
 
     private void CheckWinner()
@@ -151,6 +154,7 @@ public class BoardManager : MonoBehaviour
         {
             Debug.Log($"3 pawns are in a row ! It is player {currentGame.currentTurn} turn so it is their pawns");
             currentGame.winner = currentGame.currentTurn;
+            FCMManager.Instance.SendNotification(ENotifType.winner);
             currentGame.currentTurn = 0;
         }
     }

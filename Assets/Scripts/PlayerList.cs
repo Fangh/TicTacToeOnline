@@ -45,8 +45,8 @@ public class PlayerList : MonoBehaviour
     /// <param name="data">the game data to look into to display the correct things</param>
     private void UpdatePlayerList(SGame data)
     {
-        DisplayPlayerName(1, data.player1ID);
-        DisplayPlayerName(2, data.player2ID);
+        DisplayPlayerName(1, data.player1.id);
+        DisplayPlayerName(2, data.player2.id);
         ColorLocalPlayer(BoardManager.Instance.currentTeam);
         UpdateTurnIcons(data.currentTurn);
         UpdateWinIcons(data.winner);

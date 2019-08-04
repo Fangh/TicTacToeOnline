@@ -8,6 +8,7 @@ using UnityEngine;
 public class OnlineManager : MonoBehaviour
 {
     public static OnlineManager Instance;
+    public static event System.Action OnDependenciesChecked;
 
     [Header("References")]
     [SerializeField] private GamesList gamesList;
@@ -40,6 +41,7 @@ public class OnlineManager : MonoBehaviour
 
                 // Set a flag here to indicate whether Firebase is ready to use by your app.
                 firebaseInitialized = true;
+                OnDependenciesChecked?.Invoke();
 
                 LoginToDatabase();
             }
@@ -78,14 +80,28 @@ public class OnlineManager : MonoBehaviour
             SimplePopup.Instance.Open("Cannot create", "There is already a game with this name.");
             return;
         }
+#if !UNITY_EDITOR
+        if (!PlayerPrefs.HasKey("FCMToken"))
+        {
+            SimplePopup.Instance.Open("Cannot create", $"You don't have a token. Please connect to the internet to get one.");
+            return;
+        }
+#endif
 
-        localDatabase.games.Add(_id, BoardManager.Instance.InitializeNewGame(_id, _playerID));
+#if !UNITY_EDITOR
+        SPlayer localPlayer = new SPlayer(_playerID, PlayerPrefs.GetString("FCMToken"));
+#else
+        SPlayer localPlayer = new SPlayer(_playerID, $"COMPUTERTOKEN_{SystemInfo.deviceUniqueIdentifier}");
+#endif
+
+        localDatabase.games.Add(_id, BoardManager.Instance.InitializeNewGame(_id, localPlayer));
 
         string JSON = JsonConvert.SerializeObject(localDatabase.games[_id]);
         //Debug.Log($"JSON = {JSON}");
 
         onlineDatabase.Child("games").Child(_id).SetRawJsonValueAsync(JSON).ContinueWithOnMainThread(task =>
         {
+            SimplePopup.Instance.Open("Game created", "You are Player 1.");
             Debug.Log($"game {_id} has been created online");
             onlineDatabase.Child("games").Child(_id).ValueChanged += UpdateLocalGame;
         });
@@ -123,9 +139,22 @@ public class OnlineManager : MonoBehaviour
             SimplePopup.Instance.Open("Cannot join", $"There is no game with id {gameId}");
             return;
         }
+#if !UNITY_EDITOR
+        if (!PlayerPrefs.HasKey("FCMToken"))
+        {
+            SimplePopup.Instance.Open("Cannot join", $"You don't have a token. Please connect to the internet to get one.");
+            return;
+        }
+#endif
 
         SGame tempLocalGame = localDatabase.games[gameId];
         tempLocalGame.id = gameId;
+
+#if !UNITY_EDITOR
+        SPlayer localPlayer = new SPlayer(playerID, PlayerPrefs.GetString("FCMToken"));
+#else
+        SPlayer localPlayer = new SPlayer(playerID, $"COMPUTERTOKEN_{System.DateTime.Now}");
+#endif
 
         if (tempLocalGame.winner != 0)
         {
@@ -133,32 +162,32 @@ public class OnlineManager : MonoBehaviour
             return;
         }
 
-        if (string.IsNullOrEmpty(tempLocalGame.player2ID))
+        if (string.IsNullOrEmpty(tempLocalGame.player2.id))
         {
-            tempLocalGame.player2ID = playerID;
+            tempLocalGame.player2 = new SPlayer(localPlayer.id, localPlayer.token);
             BoardManager.Instance.currentTeam = 2;
-            SimplePopup.Instance.Open("Game joined", "You are now Player 2.");
+            SimplePopup.Instance.Open("Game joined", "You are Player 2.");
         }
         else
         {
-            if (tempLocalGame.player1ID == playerID)
+            if (tempLocalGame.player1.id == playerID)
             {
                 BoardManager.Instance.currentTeam = 1;
                 SimplePopup.Instance.Open("Game joined", $"Welcome back {playerID} (Player 1).");
             }
-            else if (tempLocalGame.player2ID == playerID)
+            else if (tempLocalGame.player2.id == playerID)
             {
                 BoardManager.Instance.currentTeam = 2;
                 SimplePopup.Instance.Open("Game joined", $"Welcome back {playerID} (Player 2).");
             }
             else
             {
-                SimplePopup.Instance.Open("Already 2 players", "Sorry there is no more free slot for you or you did not use the same username has last time.");
+                SimplePopup.Instance.Open("Already 2 players", "Sorry there is no more free slot for you or you are not using the same username from the last time.");
                 return;
             }
         }
 
-        BoardManager.Instance.InitializeGameWithData(tempLocalGame.id, tempLocalGame.player1ID, tempLocalGame.player2ID, tempLocalGame.board, tempLocalGame.currentTurn);
+        BoardManager.Instance.InitializeGameWithData(tempLocalGame.id, tempLocalGame.player1, tempLocalGame.player2, tempLocalGame.board, tempLocalGame.currentTurn);
         onlineDatabase.Child("games").Child(tempLocalGame.id).SetRawJsonValueAsync(JsonConvert.SerializeObject(tempLocalGame)).ContinueWithOnMainThread(task =>
         {
             if (task.IsFaulted || task.IsCanceled)
@@ -196,25 +225,25 @@ public class OnlineManager : MonoBehaviour
 
     public int GetNumberOfPlayerOfGame(string _id)
     {
-        if(!localDatabase.games.ContainsKey(_id))
+        if (!localDatabase.games.ContainsKey(_id))
         {
             Debug.LogError($"There is no game with id {_id}");
             return -1;
         }
         int nb = 0;
 
-        if (!string.IsNullOrEmpty(localDatabase.games[_id].player1ID))
+        if (!string.IsNullOrEmpty(localDatabase.games[_id].player1.id))
             nb++;
 
-        if (!string.IsNullOrEmpty(localDatabase.games[_id].player2ID))
+        if (!string.IsNullOrEmpty(localDatabase.games[_id].player2.id))
             nb++;
 
         return nb;
     }
 
-    #endregion
+#endregion
 
-    #region Private Methods
+#region Private Methods
 
     private void LoginToDatabase()
     {
@@ -285,5 +314,5 @@ public class OnlineManager : MonoBehaviour
             localDatabase.games.Add(e.Snapshot.Key, JsonConvert.DeserializeObject<SGame>(e.Snapshot.GetRawJsonValue()));
         }
     }
-    #endregion
+#endregion
 }
