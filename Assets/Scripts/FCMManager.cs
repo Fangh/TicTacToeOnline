@@ -32,8 +32,6 @@ public class FCMManager : MonoBehaviour
 
     private void OnTokenReceived(object sender, TokenReceivedEventArgs token)
     {
-        Debug.Log("coucou");
-
         if (!PlayerPrefs.HasKey("FCMToken"))
         {
             Debug.Log($"first time getting FCM Token {token.Token}. Saving it.");
@@ -78,10 +76,12 @@ public class FCMManager : MonoBehaviour
 
         if (request.isNetworkError)
         {
+            SimplePopup.Instance.Open("Notification", $"There were an error while sending a notification : { request.error}");
             Debug.LogError($"There were an error while sending a notification : {request.error}");
         }
         else
         {
+            SimplePopup.Instance.Open("Notification", $"notification has been send {request.downloadHandler.text}");
             Debug.Log($"notification has been send {request.downloadHandler.text}");
         }
     }

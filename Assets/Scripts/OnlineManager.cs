@@ -9,9 +9,11 @@ public class OnlineManager : MonoBehaviour
 {
     public static OnlineManager Instance;
     public static event System.Action OnDependenciesChecked;
+    public static event System.Action OnDatabaseDownloaded;
 
     [Header("References")]
     [SerializeField] private GamesList gamesList;
+    [SerializeField] private GameObject connectingLabel;
 
     internal bool isConnected;
 
@@ -270,6 +272,9 @@ public class OnlineManager : MonoBehaviour
 
                 foreach (var game in localDatabase.games)
                     gamesList.AddButton(game.Key);
+
+                connectingLabel.SetActive(false);
+                OnDatabaseDownloaded?.Invoke();
             }
         });
     }
