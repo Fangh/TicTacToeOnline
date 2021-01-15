@@ -1,7 +1,6 @@
 ﻿using Firebase;
 using Firebase.Database;
 using Firebase.Extensions;
-using Firebase.Unity.Editor;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -254,7 +253,6 @@ public class OnlineManager : MonoBehaviour
             Debug.LogError("Firebase is not initialized. can not connect.");
             return;
         }
-        FirebaseApp.DefaultInstance.SetEditorDatabaseUrl("https://tictactoe-123456.firebaseio.com/");
         onlineDatabase = FirebaseDatabase.DefaultInstance.RootReference;
         onlineDatabase.GetValueAsync().ContinueWithOnMainThread(value =>
         {
