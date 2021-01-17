@@ -2,13 +2,16 @@
 using Firebase.Database;
 using Firebase.Extensions;
 using Newtonsoft.Json;
+using System;
+using System.Runtime.Remoting.Lifetime;
+using System.Security.Policy;
 using UnityEngine;
 
 public class OnlineManager : MonoBehaviour
 {
     public static OnlineManager Instance;
-    public static event System.Action OnDependenciesChecked;
-    public static event System.Action OnDatabaseDownloaded;
+    public static event Action OnDependenciesChecked;
+    public static event Action OnDatabaseDownloaded;
 
     [Header("References")]
     [SerializeField] private GamesList gamesList;
@@ -20,6 +23,8 @@ public class OnlineManager : MonoBehaviour
 
     private bool firebaseInitialized = false;
     private SDatabase localDatabase;
+    private string currentGameId = null;
+    private bool appIsExiting = false;
 
     #region Unity Methods
 
@@ -54,6 +59,20 @@ public class OnlineManager : MonoBehaviour
         });
     }
 
+    private void OnApplicationPause(bool pause)
+    {
+        if (pause)
+            DisconnectFromGame(currentGameId);
+        else
+            ReconnectToGame(currentGameId);
+    }
+
+    private void OnApplicationQuit()
+    {
+        appIsExiting = true;
+        DisconnectFromGame(currentGameId);
+    }
+
     #endregion
 
     #region Public Methods
@@ -61,9 +80,9 @@ public class OnlineManager : MonoBehaviour
     /// <summary>
     /// Create a new game and send it to the online database.
     /// </summary>
-    /// <param name="_id">The ID of this game. Should be unique.</param>
+    /// <param name="_gameId">The ID of this game. Should be unique.</param>
     /// <param name="_playerID">The ID of the player who wants to create this game.</param>
-    public void CreateGame(string _id, string _playerID)
+    public void CreateGame(string _gameId, string _playerID)
     {
         if (!isConnected || onlineDatabase == null)
         {
@@ -76,45 +95,43 @@ public class OnlineManager : MonoBehaviour
             return;
         }
 
-        if (localDatabase.games.ContainsKey(_id))
+        if (localDatabase.games.ContainsKey(_gameId))
         {
             SimplePopup.Instance.Open("Cannot create", "There is already a game with this name.");
             return;
         }
-#if !UNITY_EDITOR
         if (!PlayerPrefs.HasKey("FCMToken"))
         {
             SimplePopup.Instance.Open("Cannot create", $"You don't have a token. Please connect to the internet to get one.");
             return;
         }
-#endif
-
-#if !UNITY_EDITOR
         SPlayer localPlayer = new SPlayer(_playerID, PlayerPrefs.GetString("FCMToken"));
-#else
-        SPlayer localPlayer = new SPlayer(_playerID, $"COMPUTERTOKEN_{SystemInfo.deviceUniqueIdentifier}");
-#endif
 
-        localDatabase.games.Add(_id, BoardManager.Instance.InitializeNewGame(_id, localPlayer));
+        if (!string.IsNullOrEmpty(currentGameId))
+            DisconnectFromGame(currentGameId);
 
-        string JSON = JsonConvert.SerializeObject(localDatabase.games[_id]);
+        localDatabase.games.Add(_gameId, BoardManager.Instance.InitializeNewGame(_gameId, localPlayer));
+
+        string JSON = JsonConvert.SerializeObject(localDatabase.games[_gameId]);
         //Debug.Log($"JSON = {JSON}");
 
-        onlineDatabase.Child("games").Child(_id).SetRawJsonValueAsync(JSON).ContinueWithOnMainThread(task =>
+        onlineDatabase.Child("games").Child(_gameId).SetRawJsonValueAsync(JSON).ContinueWithOnMainThread(task =>
         {
+            currentGameId = _gameId;
             SimplePopup.Instance.Open("Game created", "You are Player 1.");
-            Debug.Log($"game {_id} has been created online");
-            onlineDatabase.Child("games").Child(_id).ValueChanged += UpdateLocalGame;
+            Debug.Log($"game {_gameId} has been created online");
+            onlineDatabase.Child("games").Child(_gameId).ValueChanged += UpdateLocalGame;
         });
     }
 
     /// <summary>
     /// Join an online game.
     /// </summary>
-    /// <param name="gameId">Id of the game to join.</param>
-    /// <param name="playerID">The name of the player who is joining teh game.</param>
-    public void JoinGame(string gameId, string playerID)
+    /// <param name="_gameId">Id of the game to join.</param>
+    /// <param name="_playerID">The name of the player who is joining teh game.</param>
+    public void JoinGame(string _gameId, string _playerID)
     {
+        //Checking if you can join
         if (!isConnected || onlineDatabase == null)
         {
             SimplePopup.Instance.Open("Cannot join", "You are not connected.");
@@ -125,37 +142,31 @@ public class OnlineManager : MonoBehaviour
             SimplePopup.Instance.Open("Cannot join", "Online Database is not fully downloaded.");
             return;
         }
-        if (string.IsNullOrEmpty(gameId))
+        if (string.IsNullOrEmpty(_gameId))
         {
             SimplePopup.Instance.Open("Cannot join", "Please choose a game ID to join.");
             return;
         }
-        if (string.IsNullOrEmpty(playerID))
+        if (string.IsNullOrEmpty(_playerID))
         {
             SimplePopup.Instance.Open("Cannot join", "Please choose a user name before joining a game.");
             return;
         }
-        if (!localDatabase.games.ContainsKey(gameId))
+        if (!localDatabase.games.ContainsKey(_gameId))
         {
-            SimplePopup.Instance.Open("Cannot join", $"There is no game with id {gameId}");
+            SimplePopup.Instance.Open("Cannot join", $"There is no game with id {_gameId}");
             return;
         }
-#if !UNITY_EDITOR
         if (!PlayerPrefs.HasKey("FCMToken"))
         {
             SimplePopup.Instance.Open("Cannot join", $"You don't have a token. Please connect to the internet to get one.");
             return;
         }
-#endif
 
-        SGame tempLocalGame = localDatabase.games[gameId];
-        tempLocalGame.id = gameId;
+        SGame tempLocalGame = localDatabase.games[_gameId];
+        tempLocalGame.id = _gameId;
 
-#if !UNITY_EDITOR
-        SPlayer localPlayer = new SPlayer(playerID, PlayerPrefs.GetString("FCMToken"));
-#else
-        SPlayer localPlayer = new SPlayer(playerID, $"COMPUTERTOKEN_{System.DateTime.Now}");
-#endif
+        SPlayer localPlayer = new SPlayer(_playerID, PlayerPrefs.GetString("FCMToken"));
 
         if (tempLocalGame.winner != 0)
         {
@@ -163,33 +174,57 @@ public class OnlineManager : MonoBehaviour
             return;
         }
 
-        if (string.IsNullOrEmpty(tempLocalGame.player2.id))
+        //Disconnect from last Game
+        if (!string.IsNullOrEmpty(currentGameId))
+            DisconnectFromGame(currentGameId);
+
+        //Checking which player index you are.
+        int playerIndex = WhichPlayerAmI(tempLocalGame);
+
+        if (playerIndex == 0)
         {
-            tempLocalGame.player2 = new SPlayer(localPlayer.id, localPlayer.token);
-            BoardManager.Instance.currentTeam = 2;
-            SimplePopup.Instance.Open("Game joined", "You are Player 2.");
-        }
-        else
-        {
-            if (tempLocalGame.player1.id == playerID)
+            if (string.IsNullOrEmpty(tempLocalGame.player2.token)) //There is a place for you
             {
-                BoardManager.Instance.currentTeam = 1;
-                SimplePopup.Instance.Open("Game joined", $"Welcome back {playerID} (Player 1).");
-            }
-            else if (tempLocalGame.player2.id == playerID)
-            {
+                tempLocalGame.player2 = new SPlayer(localPlayer.id, localPlayer.token);
+                tempLocalGame.player2.isConnected = true;
                 BoardManager.Instance.currentTeam = 2;
-                SimplePopup.Instance.Open("Game joined", $"Welcome back {playerID} (Player 2).");
+                SimplePopup.Instance.Open("Game joined", $"Hello {localPlayer.id} You are Player 2.");
             }
-            else
+            else //Everything is taken
             {
                 SimplePopup.Instance.Open("Already 2 players", "Sorry there is no more free slot for you or you are not using the same username from the last time.");
                 return;
             }
         }
+        else
+        {
+            if (playerIndex == 1)
+            {
+                tempLocalGame.player1.isConnected = true;
+                tempLocalGame.player1.id = _playerID; //update with the new name
+            }
+            else
+            {
+                tempLocalGame.player2.isConnected = true;
+                tempLocalGame.player2.id = _playerID;//update with the new name
+            }
+
+            BoardManager.Instance.currentTeam = playerIndex;
+            SimplePopup.Instance.Open("Game joined", $"Welcome back {_playerID} (Player {playerIndex}).");
+        }
+        currentGameId = tempLocalGame.id;
 
         BoardManager.Instance.InitializeGameWithData(tempLocalGame.id, tempLocalGame.player1, tempLocalGame.player2, tempLocalGame.board, tempLocalGame.currentTurn);
-        onlineDatabase.Child("games").Child(tempLocalGame.id).SetRawJsonValueAsync(JsonConvert.SerializeObject(tempLocalGame)).ContinueWithOnMainThread(task =>
+        UpdateOnlineGame(tempLocalGame, () =>
+        {
+            onlineDatabase.Child("games").Child(tempLocalGame.id).ValueChanged += UpdateLocalGame;
+        });
+
+    }
+
+    public void UpdateOnlineGame(SGame localGame, Action _callbackOnUpdated = null)
+    {
+        onlineDatabase.Child("games").Child(localGame.id).SetRawJsonValueAsync(JsonConvert.SerializeObject(localGame)).ContinueWithOnMainThread(task =>
         {
             if (task.IsFaulted || task.IsCanceled)
             {
@@ -197,18 +232,9 @@ public class OnlineManager : MonoBehaviour
             }
             else
             {
-                Debug.Log("You have successfully told the server that you have joined the game");
-                onlineDatabase.Child("games").Child(tempLocalGame.id).ValueChanged += UpdateLocalGame;
+                Debug.Log($"Online {localGame.id} game is updated");
+                _callbackOnUpdated?.Invoke();
             }
-        });
-
-    }
-
-    public void UpdateOnlineGame(SGame localGame)
-    {
-        onlineDatabase.Child("games").Child(localGame.id).SetRawJsonValueAsync(JsonConvert.SerializeObject(localGame)).ContinueWithOnMainThread(task =>
-        {
-            Debug.Log($"Online {localGame.id} game is updated");
         });
     }
 
@@ -233,18 +259,18 @@ public class OnlineManager : MonoBehaviour
         }
         int nb = 0;
 
-        if (!string.IsNullOrEmpty(localDatabase.games[_id].player1.id))
+        if (!string.IsNullOrEmpty(localDatabase.games[_id].player1.token))
             nb++;
 
-        if (!string.IsNullOrEmpty(localDatabase.games[_id].player2.id))
+        if (!string.IsNullOrEmpty(localDatabase.games[_id].player2.token))
             nb++;
 
         return nb;
     }
 
-#endregion
+    #endregion
 
-#region Private Methods
+    #region Private Methods
 
     private void LoginToDatabase()
     {
@@ -264,12 +290,26 @@ public class OnlineManager : MonoBehaviour
             {
                 isConnected = true;
                 Debug.Log("OnlineDatabase = " + value.Result.GetRawJsonValue());
-                localDatabase = JsonConvert.DeserializeObject<SDatabase>(value.Result.GetRawJsonValue());
-                onlineDatabase.Child("games").ChildAdded += AddGameInLocalDatabase;
-                onlineDatabase.Child("games").ChildRemoved += RemoveGameInLocalDatabase; ;
 
-                foreach (var game in localDatabase.games)
-                    gamesList.AddButton(game.Key);
+                if (!string.IsNullOrEmpty(value.Result.GetRawJsonValue()))
+                {
+                    try
+                    {
+                        localDatabase = JsonConvert.DeserializeObject<SDatabase>(value.Result.GetRawJsonValue());
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Error : {e}");
+                    }
+                    onlineDatabase.Child("games").ChildAdded += AddGameInLocalDatabase;
+                    onlineDatabase.Child("games").ChildRemoved += RemoveGameInLocalDatabase;
+
+                    if (localDatabase.games.Count > 0)
+                    {
+                        foreach (var game in localDatabase.games)
+                            gamesList.AddButton(game.Key);
+                    }
+                }
 
                 connectingLabel.SetActive(false);
                 OnDatabaseDownloaded?.Invoke();
@@ -279,12 +319,18 @@ public class OnlineManager : MonoBehaviour
 
     private void UpdateLocalGame(object sender, ValueChangedEventArgs args)
     {
+        if (appIsExiting)
+            return;
+
         if (args.DatabaseError != null)
         {
             Debug.LogError(args.DatabaseError.Message);
             return;
         }
         Debug.Log($"Updating local game with these data : \n {args.Snapshot.GetRawJsonValue()} ");
+        if (string.IsNullOrEmpty(args.Snapshot.GetRawJsonValue()))
+            return;
+
         SGame gameData = JsonConvert.DeserializeObject<SGame>(args.Snapshot.GetRawJsonValue());
         localDatabase.games[gameData.id] = gameData;
         BoardManager.Instance.UpdateBoard(gameData);
@@ -317,5 +363,67 @@ public class OnlineManager : MonoBehaviour
             localDatabase.games.Add(e.Snapshot.Key, JsonConvert.DeserializeObject<SGame>(e.Snapshot.GetRawJsonValue()));
         }
     }
-#endregion
+
+    /// <summary>
+    /// Compare your FCMToken against game.player.id foreach players.
+    /// </summary>
+    /// <param name="_game">The game you want to check</param>
+    /// <returns>Returns 0 if you are not is this game. 1 if you are player1, 2 if you are player2</returns>
+    private int WhichPlayerAmI(SGame _game)
+    {
+        if (!string.IsNullOrEmpty(_game.player1.token))
+        {
+            if (_game.player1.token == PlayerPrefs.GetString("FCMToken"))
+                return 1;
+        }
+
+        if (!string.IsNullOrEmpty(_game.player2.token))
+        {
+            if (_game.player2.token == PlayerPrefs.GetString("FCMToken"))
+                return 2;
+        }
+
+        return 0;
+    }
+
+    private void DisconnectFromGame(string _gameId)
+    {
+        if (_gameId == null)
+            return;
+
+        SGame tempGame = localDatabase.games[_gameId];
+
+        //Disconnect you from the last game you were.
+        int playerLastIndex = WhichPlayerAmI(tempGame);
+        if (playerLastIndex == 1)
+            tempGame.player1.isConnected = false;
+        else if (playerLastIndex == 2)
+            tempGame.player2.isConnected = false;
+
+        onlineDatabase.Child("games").Child(_gameId).ValueChanged -= UpdateLocalGame;
+        Debug.Log($"Disconnecting player{playerLastIndex} from {_gameId}");
+
+        UpdateOnlineGame(tempGame);
+    }
+
+    private void ReconnectToGame(string _gameId)
+    {
+        if (_gameId == null)
+            return;
+
+        SGame tempGame = localDatabase.games[_gameId];
+
+        //Disconnect you from the last game you were.
+        int playerLastIndex = WhichPlayerAmI(tempGame);
+        if (playerLastIndex == 1)
+            tempGame.player1.isConnected = true;
+        else if (playerLastIndex == 2)
+            tempGame.player2.isConnected = true;
+
+        onlineDatabase.Child("games").Child(_gameId).ValueChanged += UpdateLocalGame;
+        Debug.Log($"Reconnect player{playerLastIndex} from {_gameId}");
+
+        UpdateOnlineGame(tempGame);
+    }
+    #endregion
 }

@@ -20,6 +20,11 @@ public class FCMManager : MonoBehaviour
     {
         FirebaseMessaging.TokenReceived += OnTokenReceived;
         FirebaseMessaging.MessageReceived += OnMessageReceived;
+
+#if UNITY_EDITOR
+        PlayerPrefs.SetString("FCMToken", $"COMPUTERTOKEN_{SystemInfo.deviceUniqueIdentifier}");
+        Debug.Log("Editor Token has been registered");
+#endif
         Debug.Log("TokenReceived has been registered");
     }
 
@@ -52,9 +57,19 @@ public class FCMManager : MonoBehaviour
     private void OnMessageReceived(object sender, MessageReceivedEventArgs e)
     {
         Debug.Log($"Received a new message (type : {e.Message.MessageType} id:{e.Message.MessageId}) from: {e.Message.From}. \n content : {Newtonsoft.Json.JsonConvert.SerializeObject(e.Message.Data) } ");
+        if (e.Message.Data.ContainsKey("gameId"))
+        {
+            string gameId = e.Message.Data["gameId"];
+            if (gameId != BoardManager.Instance.currentGame.id)
+            {
+                SimplePopup.Instance.Open("Notification", $"It's your turn on game {gameId}");
+            }
+        }
     }
 
+    #endregion
 
+    /*
     private IEnumerator POST_SendNotif(string recipientToken, string title, string body)
     {
         if (BoardManager.Instance.currentTeam == 0)
@@ -67,7 +82,7 @@ public class FCMManager : MonoBehaviour
         string JSON = Newtonsoft.Json.JsonConvert.SerializeObject(new Dictionary<string, object>() { { "message", newMessage } });
         UnityWebRequest request = new UnityWebRequest("https://fcm.googleapis.com/v1/projects/tictactoe-123456/messages:send", "POST");
         request.SetRequestHeader("Content-Type", "application/json");
-        //I add to use Postman to get the key : https://stackoverflow.com/questions/50399170/what-bearer-token-should-i-be-using-for-firebase-cloud-messaging-testing
+        //I had to use Postman to get the key : https://stackoverflow.com/questions/50399170/what-bearer-token-should-i-be-using-for-firebase-cloud-messaging-testing
         request.SetRequestHeader("Authorization", "Bearer ya29.GltaB8Ne9yc0uXd6KJW5YrU0RiO-F-eNds92YpkFd7dTIsRzRN2wzezInMIo9rgeP-IVcYTKI_ngG9pKhclrfvz9PV_unksGAk2fTF6Rd0d1GQWuvTcDRDQksTBx");
         request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.ASCII.GetBytes(JSON));
         request.downloadHandler = new DownloadHandlerBuffer();
@@ -86,7 +101,6 @@ public class FCMManager : MonoBehaviour
         }
     }
 
-    #endregion
 
 
     public void SendNotification(ENotifType type)
@@ -114,10 +128,10 @@ public class FCMManager : MonoBehaviour
             default:
                 break;
         }
-
     }
+    */
 }
-
+/*
 public struct SFireCloudMessage
 {
     public string token;
@@ -147,3 +161,4 @@ public enum ENotifType
     nextTurn,
     winner
 }
+*/

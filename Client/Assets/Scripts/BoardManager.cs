@@ -13,7 +13,7 @@ public class BoardManager : MonoBehaviour
     [SerializeField] private GameObject playerList;
 
     internal SGame currentGame;
-    internal int currentTeam;       
+    internal int currentTeam;
 
     private void Awake()
     {
@@ -22,6 +22,7 @@ public class BoardManager : MonoBehaviour
 
     public SGame InitializeNewGame(string uniqueID, SPlayer player1)
     {
+        player1.isConnected = true;
         currentGame = new SGame(uniqueID, player1);
         CleanBoard();
         OnNewGame?.Invoke();
@@ -36,7 +37,7 @@ public class BoardManager : MonoBehaviour
         CleanBoard();
         OnNewGame?.Invoke();
 
-        currentGame = new SGame(id, player1, player2, board, currentTurn);
+        currentGame = new SGame(id, player1, player2, board, currentTurn, DateTimeOffset.Now.ToUnixTimeMilliseconds());
         if (currentGame.currentTurn == 0)
             NextTurn();
 
@@ -50,6 +51,8 @@ public class BoardManager : MonoBehaviour
     /// <param name="data">The data to update the displayed board with</param>
     public void UpdateBoard(SGame data)
     {
+        CleanBoard(true);
+
         if (currentGame.board != data.board)
             currentGame.board = data.board;
 
@@ -71,7 +74,7 @@ public class BoardManager : MonoBehaviour
 
         for (int i = 0; i < 9; i++)
         {
-            if (data.board[i] != 0 && squares[i].pawnTeam == 0)
+            if (data.board[i] != 0)
             {
                 DisplayPawn(i);
             }
@@ -94,7 +97,7 @@ public class BoardManager : MonoBehaviour
 
         if (currentGame.board[_index] == 0)
         {
-            currentGame.board[_index] = (int)_team;
+            currentGame.board[_index] = (int) _team;
             CheckWinner();
             if (currentGame.winner == 0)
                 NextTurn();
@@ -114,15 +117,18 @@ public class BoardManager : MonoBehaviour
         squares[_index].InstantiatePawn(pawnPrefab, currentGame.board[_index]);
     }
 
-    private void CleanBoard()
+    private void CleanBoard(bool _onlyVisual = false)
     {
         if (currentGame.board == null || currentGame.board.Length == 0)
             return;
 
         for (int i = 0; i < currentGame.board.Length; i++)
         {
-            currentGame.board[i] = 0;
-            squares[i].DeletePawn();
+            if(!_onlyVisual)
+                currentGame.board[i] = 0;
+
+            if(squares[i] != null)
+                squares[i].DeletePawn();
         }
     }
 
@@ -132,9 +138,6 @@ public class BoardManager : MonoBehaviour
             currentGame.currentTurn = 2;
         else
             currentGame.currentTurn = 1;
-
-        if(!string.IsNullOrEmpty(currentGame.player1.id) && !string.IsNullOrEmpty(currentGame.player2.id))
-            FCMManager.Instance.SendNotification(ENotifType.nextTurn);
     }
 
     private void CheckWinner()
@@ -147,14 +150,13 @@ public class BoardManager : MonoBehaviour
             || (currentGame.board[0] == currentGame.board[3] && currentGame.board[0] == currentGame.board[6] && currentGame.board[0] != 0)
             || (currentGame.board[1] == currentGame.board[4] && currentGame.board[1] == currentGame.board[7] && currentGame.board[1] != 0)
             || (currentGame.board[2] == currentGame.board[4] && currentGame.board[2] == currentGame.board[6] && currentGame.board[2] != 0)
-            || (currentGame.board[2] == currentGame.board[6] && currentGame.board[2] == currentGame.board[8] && currentGame.board[2] != 0)
+            || (currentGame.board[2] == currentGame.board[5] && currentGame.board[2] == currentGame.board[8] && currentGame.board[2] != 0)
             || (currentGame.board[3] == currentGame.board[4] && currentGame.board[3] == currentGame.board[5] && currentGame.board[3] != 0)
             || (currentGame.board[6] == currentGame.board[7] && currentGame.board[6] == currentGame.board[8] && currentGame.board[6] != 0)
             )
         {
             Debug.Log($"3 pawns are in a row ! It is player {currentGame.currentTurn} turn so it is their pawns");
             currentGame.winner = currentGame.currentTurn;
-            FCMManager.Instance.SendNotification(ENotifType.winner);
             currentGame.currentTurn = 0;
         }
     }

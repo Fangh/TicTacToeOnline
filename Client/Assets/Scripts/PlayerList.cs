@@ -60,7 +60,7 @@ public class PlayerList : MonoBehaviour
     /// <param name="name">The name to display</param>
     private void DisplayPlayerName(int playerID, string name)
     {
-        Debug.Log($"Displaying player{playerID} name ({name})");
+        //Debug.Log($"Displaying player{playerID} name ({name})");
         if (playerID == 1)
             player1Label.text = name;
         else if (playerID == 2)
@@ -71,13 +71,13 @@ public class PlayerList : MonoBehaviour
     {
         if (localPlayerID == 1)
         {
-            Debug.Log($"Coloring Player 1 to green");
+            //Debug.Log($"Coloring Player 1 to green");
             player1Label.color = Color.green;
             player2Label.color = Color.white;
         }
         else if (localPlayerID == 2)
         {
-            Debug.Log($"Coloring Player 2 to green");
+            //Debug.Log($"Coloring Player 2 to green");
             player1Label.color = Color.white;
             player2Label.color = Color.green;
         }
@@ -94,7 +94,7 @@ public class PlayerList : MonoBehaviour
         if (turn == 0)
             return;
 
-        Debug.Log($"Displaying an arrow in front of player{turn}");
+        //Debug.Log($"Displaying an arrow in front of player{turn}");
         if (turn == 1)
         {
             player1TurnIcon.enabled = true;
@@ -116,11 +116,11 @@ public class PlayerList : MonoBehaviour
     {
         if (winner == 0)
         {
-            Debug.Log($"There is still no winner");
+            //Debug.Log($"There is still no winner");
             return;
         }
 
-        Debug.Log($"Displaying an :tada: in front of player{winner}");
+        //Debug.Log($"Displaying an :tada: in front of player{winner}");
         if (winner == 1)
             player1WinIcon.enabled = true;
         else if (winner == 2)

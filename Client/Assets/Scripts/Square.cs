@@ -10,7 +10,7 @@ public class Square : MonoBehaviour, IPointerClickHandler
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if(board.currentGame.currentTurn != 0 && board.currentGame.currentTurn == board.currentTeam)
+        if (board.currentGame.currentTurn != 0 && board.currentGame.currentTurn == board.currentTeam)
         {
             board.PlacePawn(index, board.currentTeam);
             OnlineManager.Instance.UpdateOnlineGame(board.currentGame);
