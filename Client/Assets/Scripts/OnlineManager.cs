@@ -280,19 +280,22 @@ public class OnlineManager : MonoBehaviour
             return;
         }
         onlineDatabase = FirebaseDatabase.DefaultInstance.RootReference;
-        onlineDatabase.GetValueAsync().ContinueWithOnMainThread(value =>
-        {
-            if (value.IsFaulted || value.IsCanceled)
-            {
-                Debug.LogError($"There were an error while trying to downloade the database : {value.Exception.Message}");
-            }
-            else if (value.IsCompleted)
-            {
-                isConnected = true;
-                Debug.Log("OnlineDatabase = " + value.Result.GetRawJsonValue());
 
-                if (!string.IsNullOrEmpty(value.Result.GetRawJsonValue()))
+        try
+        {
+            onlineDatabase.GetValueAsync().ContinueWithOnMainThread(value =>
+            {
+                if (value.IsFaulted || value.IsCanceled || string.IsNullOrEmpty(value.Result.GetRawJsonValue()))
                 {
+                    Debug.LogError($"There were an error while trying to download the database");
+                    if (value.Exception != null)
+                        Debug.LogError(value.Exception.Message);
+                }
+                else if (value.IsCompleted)
+                {
+                    isConnected = true;
+                    Debug.Log("OnlineDatabase = " + value.Result.GetRawJsonValue());
+
                     try
                     {
                         localDatabase = JsonConvert.DeserializeObject<SDatabase>(value.Result.GetRawJsonValue());
@@ -309,12 +312,15 @@ public class OnlineManager : MonoBehaviour
                         foreach (var game in localDatabase.games)
                             gamesList.AddButton(game.Key);
                     }
+                    connectingLabel.SetActive(false);
+                    OnDatabaseDownloaded?.Invoke();
                 }
-
-                connectingLabel.SetActive(false);
-                OnDatabaseDownloaded?.Invoke();
-            }
-        });
+            });
+        }
+        catch (Exception e)
+        {
+            Debug.LogError(e);
+        }
     }
 
     private void UpdateLocalGame(object sender, ValueChangedEventArgs args)
@@ -347,6 +353,7 @@ public class OnlineManager : MonoBehaviour
         {
             Debug.Log($"Game {e.Snapshot.Key} has been deleted from the online database. Updating localDatase...");
             localDatabase.games.Remove(e.Snapshot.Key);
+            currentGameId = null;
         }
     }
 

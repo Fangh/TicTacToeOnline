@@ -27,8 +27,8 @@ exports.deleteGames = functions.database.ref('/games').onUpdate((snapshot, conte
   gamesDictionnary.forEach(game => 
   {
     if(game[1].id === "SERVER")
-      continue;
-      
+      return;
+
     if (game[1].winner !== 0)
     {
       functions.logger.log(game[1].id + " is finished. Deleting it.");
@@ -79,20 +79,20 @@ exports.sendMessage = functions.database.ref('/games/{gameId}').onUpdate((snapsh
 {
   const thisGame = snapshot.after.val();
   var returnValue = "none";
-  functions.logger.log("gameId that was changed = " +thisGame.id);
+  // functions.logger.log("gameId that was changed = " +thisGame.id);
   // functions.logger.log("game that was changed = " +thisGame);
 
   if (thisGame.winner === 0)
   {
-    if(thisGame.currentTurn === 1 && !thisGame.player1.isConnected)
+    if(thisGame.currentTurn === 1 && !thisGame.player1.isConnected && thisGame.player1.token !== "")
       SendNotificationTo(thisGame.id, thisGame.player1.id, thisGame.player1.token, "Next Turn", thisGame.player1.id + " it's your turn to play in " + thisGame.id);
-    else if(thisGame.currentTurn === 2 && !thisGame.player2.isConnected)
+    else if(thisGame.currentTurn === 2 && !thisGame.player2.isConnected && thisGame.player2.token !== "")
       SendNotificationTo(thisGame.id, thisGame.player2.id, thisGame.player2.token, "Next Turn", thisGame.player2.id + " it's your turn to play in " + thisGame.id);
   }
 
   function SendNotificationTo(_gameId, _playerId, _playerToken, _title, _content)
   {
-    functions.logger.log('Trying to send a notif to ' + _playerId + ' from game '+_gameId);
+    // functions.logger.log('Trying to send a notif to ' + _playerId + ' from game '+_gameId);
     if (_playerToken.includes("COMPUTERTOKEN_")) //do not send notif to computers
       return returnValue = "computer token";
 
