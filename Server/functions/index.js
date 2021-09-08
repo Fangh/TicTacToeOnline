@@ -1,5 +1,5 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
 
 admin.initializeApp();
 
@@ -11,14 +11,7 @@ admin.initializeApp();
 // });
 
 
-// exports.addMessage = functions.https.onRequest(async (req, res) =>
-// {
-//     const original = req.query.text;
-//     const snapshot = await admin.database().ref('/messages').push({original : original});
-//     res.redirect(303, snapshot.ref.toString());
-// });
-
-exports.deleteGames = functions.database.ref('/games').onUpdate((snapshot, context) =>
+exports.deleteGames = functions.database.ref("/games").onUpdate((snapshot, context) =>
 {
   const gamesDeleted = [];
   const snapValue = snapshot.after.val();
@@ -26,16 +19,14 @@ exports.deleteGames = functions.database.ref('/games').onUpdate((snapshot, conte
 
   gamesDictionnary.forEach(game => 
   {
+    //game[0] == game[1].id
     if(game[1].id === "SERVER")
       return;
-
-      functions.logger.log(game[0] + "=> id");
-      functions.logger.log(game[1].id + "=> game.id");
 
       if(game[1].id == undefined)
       {
         functions.logger.log(game[0] + " ID is undefined. Deleting it.");
-        admin.database().ref('/games/' + game[0]).remove();
+        admin.database().ref("/games/" + game[0]).remove();
         gamesDeleted.push(game.id);
 
       }
@@ -43,14 +34,14 @@ exports.deleteGames = functions.database.ref('/games').onUpdate((snapshot, conte
     if (game[1].winner !== 0)
     {
       functions.logger.log(game[1].id + " is finished. Deleting it.");
-      admin.database().ref('/games/' + game[1].id).remove();
+      admin.database().ref("/games/" + game[1].id).remove();
       gamesDeleted.push(game.id);
     }
 
     if (new Date() - game[1].updatedTime > 604800000) //1week in ms
     {
       functions.logger.log(game[1].id + " has not been updated since one week. Deleting it.");
-      admin.database().ref('/games/' + game[1].id).remove();
+      admin.database().ref("/games/" + game[1].id).remove();
       gamesDeleted.push(game.id);
     }
 
@@ -59,8 +50,8 @@ exports.deleteGames = functions.database.ref('/games').onUpdate((snapshot, conte
   return gamesDeleted;
 });
 
-//functions.pubsub.schedule('every 1 hours').onRun((context)
-exports.removeInactivePlayers = functions.database.ref('/games').onUpdate((snapshot, context) =>
+//functions.pubsub.schedule("every 1 hours").onRun((context)
+exports.removeInactivePlayers = functions.database.ref("/games").onUpdate((snapshot, context) =>
 {
   const snapValue = snapshot.after.val();
   const gamesDictionnary = Object.entries(snapValue); //games : [ [id, gamedata], [id2, gameData] ]
@@ -83,13 +74,13 @@ exports.removeInactivePlayers = functions.database.ref('/games').onUpdate((snaps
   return disconnectedPlayersFromGames;
 });
 
-exports.showGames = functions.https.onRequest(async (req, res) =>
+exports.showGames = functions.https.onRequest((req, res) =>
 {
-  const snapshot = await admin.database().ref('/games').val();
+  const snapshot = admin.database().ref("/games").val();
   functions.logger.log("database = " + snapshot);
 });
 
-exports.sendMessage = functions.database.ref('/games/{gameId}').onUpdate((snapshot, context) =>
+exports.sendMessage = functions.database.ref("/games/{gameId}").onUpdate((snapshot, context) =>
 {
   const thisGame = snapshot.after.val();
   var returnValue = "none";
@@ -106,7 +97,7 @@ exports.sendMessage = functions.database.ref('/games/{gameId}').onUpdate((snapsh
 
   function SendNotificationTo(_gameId, _playerId, _playerToken, _title, _content)
   {
-    // functions.logger.log('Trying to send a notif to ' + _playerId + ' from game '+_gameId);
+    // functions.logger.log("Trying to send a notif to " + _playerId + " from game "+_gameId);
     if (_playerToken.includes("COMPUTERTOKEN_")) //do not send notif to computers
       return returnValue = "computer token";
 
@@ -124,13 +115,13 @@ exports.sendMessage = functions.database.ref('/games/{gameId}').onUpdate((snapsh
       .then((response) => 
       {
         // Response is a message ID string.
-        // functions.logger.log('Successfully sent message:', response);
+        // functions.logger.log("Successfully sent message:", response);
         returnValue = "notif send to " + _playerId;
         return response;
       })
       .catch((error) => 
       {
-        functions.logger.error('Error sending message:', error);
+        functions.logger.error("Error sending message:", error);
         returnValue = "notif failed to send to " + _playerId;
       });
   }
