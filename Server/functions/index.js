@@ -29,6 +29,17 @@ exports.deleteGames = functions.database.ref('/games').onUpdate((snapshot, conte
     if(game[1].id === "SERVER")
       return;
 
+      functions.logger.log(game[0] + "=> id");
+      functions.logger.log(game[1].id + "=> game.id");
+
+      if(game[1].id == undefined)
+      {
+        functions.logger.log(game[0] + " ID is undefined. Deleting it.");
+        admin.database().ref('/games/' + game[0]).remove();
+        gamesDeleted.push(game.id);
+
+      }
+
     if (game[1].winner !== 0)
     {
       functions.logger.log(game[1].id + " is finished. Deleting it.");
@@ -56,6 +67,9 @@ exports.removeInactivePlayers = functions.database.ref('/games').onUpdate((snaps
   const disconnectedPlayersFromGames = [];
   gamesDictionnary.forEach(game => 
   {
+    if(game[1].id === "SERVER")
+      return;
+
     if (new Date() - game[1].updatedTime > 3600000) //1hours in ms
     {
       functions.logger.log(game[1].id + " has not been updated since one hour. Diconnect everybody.");
