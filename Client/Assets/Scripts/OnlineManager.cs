@@ -3,8 +3,6 @@ using Firebase.Database;
 using Firebase.Extensions;
 using Newtonsoft.Json;
 using System;
-using System.Runtime.Remoting.Lifetime;
-using System.Security.Policy;
 using UnityEngine;
 
 public class OnlineManager : MonoBehaviour
